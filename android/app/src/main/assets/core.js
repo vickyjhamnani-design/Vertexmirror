@@ -32,6 +32,8 @@
   function isCell(el) {
     var s = sideOf(el);
     if (!s) return false;
+    // a price cell never holds form controls; the bet slip (class "... back") does
+    if (el.querySelector('input,button,select,textarea')) return false;
     var other = s.side === 'back' ? 'lay' : 'back';
     var kids = el.querySelectorAll('[class*="' + other + '"]');
     for (var i = 0; i < kids.length; i++) {
@@ -138,11 +140,19 @@
         return /^(text|number|tel|)$/i.test(i.getAttribute('type') || '') && !i.readOnly && !i.disabled && visible(i);
       });
       if (inputs.length) {
-        var named = inputs.filter(function (i) {
-          var s = [i.name, i.id, i.className, i.placeholder, i.getAttribute('formcontrolname'), i.getAttribute('ng-model'), i.getAttribute('v-model')].join(' ');
-          return /stake|amount|amt/i.test(s);
-        });
-        return named[0] || inputs[inputs.length - 1];
+        var attrs = function (i) {
+          return [i.name, i.id, i.className, i.placeholder, i.getAttribute('formcontrolname'), i.getAttribute('ng-model'), i.getAttribute('v-model')].join(' ');
+        };
+        var notOdds = inputs.filter(function (i) { return !/odd|price|rate/i.test(attrs(i)); });
+        if (notOdds.length) inputs = notOdds;
+        var named = inputs.filter(function (i) { return /stake|amount|amt/i.test(attrs(i)); });
+        if (named.length) return named[0];
+        // unnamed boxes: the stake is the empty one, or the one without a decimal point (odds look like 1.33)
+        var empty = inputs.filter(function (i) { return i.value === ''; });
+        if (empty.length === 1) return empty[0];
+        var whole = inputs.filter(function (i) { return i.value.indexOf('.') < 0; });
+        if (whole.length === 1) return whole[0];
+        return inputs[inputs.length - 1];
       }
       a = a.parentElement; depth++;
     }
@@ -161,6 +171,16 @@
   function capture(ev) {
     var target = ev.target;
     if (!target || target.nodeType !== 1) return null;
+    var btn = buttonOf(target);
+    if (btn) {
+      var txt = buttonText(btn);
+      if (SUBMIT_RE.test(txt)) {
+        var inp = stakeInput(btn.parentElement);
+        if (inp) return { t: 'place', stake: String(inp.value || '').trim() };
+      } else if (CANCEL_RE.test(txt) && stakeInput(btn.parentElement)) {
+        return { t: 'cancel' };
+      }
+    }
     var cell = cellOf(target);
     if (cell) {
       var rows = buildIndex();
@@ -176,16 +196,6 @@
         pos: s.side === 'back' ? same.length - 1 - i : i, // 0 = best price
         occ: twins.indexOf(row)
       };
-    }
-    var btn = buttonOf(target);
-    if (btn) {
-      var txt = buttonText(btn);
-      if (SUBMIT_RE.test(txt)) {
-        var inp = stakeInput(btn.parentElement);
-        if (!inp) return null; // a submit button with no stake box is not a bet slip
-        return { t: 'place', stake: String(inp.value || '').trim() };
-      }
-      if (CANCEL_RE.test(txt) && stakeInput(btn.parentElement)) return { t: 'cancel' };
     }
     return null;
   }
@@ -252,8 +262,24 @@
     var slip = findSlipButton(CANCEL_RE);
     if (slip) { slip.btn.click(); report(true, 'slip cleared'); }
   }
+  /* open the page the PC is on; inside the same site this is an in-app route change, no reload */
+  function nav(d) {
+    var u;
+    try { u = new URL(d.url); } catch (e) { return report(false, 'bad address'); }
+    if (!/^https?:$/.test(u.protocol)) return report(false, 'bad address');
+    var path = u.pathname + u.search + u.hash;
+    if (location.origin !== u.origin) { location.href = u.href; return report(true, 'opening ' + u.host + path); }
+    if (location.pathname + location.search + location.hash === path) return;
+    history.pushState({}, '', path);
+    window.dispatchEvent(new PopStateEvent('popstate', { state: {} }));
+    setTimeout(function () { // site did not react to the route change: load it normally
+      if (location.pathname + location.search + location.hash !== path) location.href = u.href;
+    }, 600);
+    return report(true, 'opened ' + path);
+  }
   function handle(json) {
     var d = typeof json === 'string' ? JSON.parse(json) : json;
+    if (d.t === 'nav') return nav(d);
     if (d.t === 'sel') return select(d);
     if (d.t === 'place') return place(d);
     if (d.t === 'cancel') return cancel();
