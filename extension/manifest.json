@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "BetMirror (PC)",
+  "version": "1.0",
+  "description": "Sends the bet you click on this PC to the BetMirror app on your phone over the same Wi-Fi. No server.",
+  "permissions": ["storage", "activeTab", "alarms"],
+  "host_permissions": ["http://*/*", "https://*/*"],
+  "background": { "service_worker": "bg.js" },
+  "action": { "default_title": "BetMirror", "default_popup": "popup.html" },
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["core.js", "content.js"],
+      "run_at": "document_start",
+      "all_frames": true
+    }
+  ]
+}

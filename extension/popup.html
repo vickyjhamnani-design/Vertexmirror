@@ -1,0 +1,41 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  body { font: 13px/1.4 system-ui, sans-serif; width: 290px; margin: 12px; color: #1b1f24; }
+  h1 { font-size: 15px; margin: 0 0 10px; }
+  label { display: block; margin: 8px 0 3px; color: #57606a; font-size: 12px; }
+  input[type=text] { width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid #c9d1d9; border-radius: 6px; font: inherit; }
+  .row { display: flex; gap: 8px; }
+  .row > div { flex: 1; }
+  button { padding: 6px 10px; border: 1px solid #c9d1d9; border-radius: 6px; background: #f6f8fa; font: inherit; cursor: pointer; }
+  button.primary { background: #1a7f37; border-color: #1a7f37; color: #fff; }
+  .bar { display: flex; gap: 8px; margin-top: 10px; }
+  #status { margin-top: 12px; padding: 8px; border-radius: 6px; background: #f6f8fa; }
+  .ok { color: #1a7f37; font-weight: 600; } .bad { color: #b42318; font-weight: 600; }
+  .site { margin-top: 12px; display: flex; align-items: center; gap: 8px; }
+  small { color: #57606a; display: block; margin-top: 4px; word-break: break-word; }
+</style>
+</head>
+<body>
+  <h1>BetMirror</h1>
+  <div class="row">
+    <div><label>Phone IP (shown in the app)</label><input id="ip" type="text" placeholder="192.168.1.23"></div>
+    <div style="flex:0 0 80px"><label>Code</label><input id="code" type="text" placeholder="1234"></div>
+  </div>
+  <div class="bar">
+    <button id="save" class="primary">Save &amp; connect</button>
+    <button id="test">Send test</button>
+  </div>
+  <div class="site">
+    <input id="site" type="checkbox"><span>Mirror clicks on <b id="host">this site</b></span>
+  </div>
+  <div id="status">
+    <div id="conn" class="bad">Not connected</div>
+    <small id="sent"></small>
+    <small id="reply"></small>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
