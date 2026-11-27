@@ -10,6 +10,7 @@
 
   var SIDE_RE = /(^|[\s_-])(back|lay)(\d*)(?=$|[\s_-])/i;
   var NOISE_RE = /^(back|lay|yes|no|min|max|suspended|ball running|cash ?out|bet lock|closed|open|active|inactive)\b/i;
+  var AMOUNT_RE = /^[\d.,]+\s*(k|l|lac|lakh|cr)?$/i; // "25K", "1L": bet limits, never a name
   var SUBMIT_RE = /^(place ?bet|placebet|submit|place|confirm|confirm bet|done)$/;
   var CANCEL_RE = /^(cancel|reset|clear|clear all|close)$/;
 
@@ -27,7 +28,13 @@
   function sideOf(el) {
     if (!el || typeof el.className !== 'string') return null;
     var m = el.className.match(SIDE_RE);
-    return m ? { side: m[2].toLowerCase(), token: (m[2] + m[3]).toLowerCase() } : null;
+    if (!m) return null;
+    var side = m[2].toLowerCase(), token = (m[2] + m[3]).toLowerCase();
+    var parts = el.className.toLowerCase().split(/\s+/);
+    for (var i = 0; i < parts.length; i++) {
+      if (parts[i].indexOf(side) === 0 && /^\d+$/.test(parts[i].slice(side.length))) { token = parts[i]; break; }
+    }
+    return { side: side, token: token };
   }
   function isCell(el) {
     var s = sideOf(el);
@@ -64,21 +71,22 @@
     }
     return out;
   }
-  /* first meaningful text inside root, skipping anything inside the `skip` elements */
-  function firstText(root, skip, before) {
+  /* first meaningful text inside root, skipping anything inside the `skip` elements.
+     Hidden text counts too: some sites keep the runner name in the row but hide it on phones. */
+  function firstText(root, skip, before, reject) {
     var w = document.createTreeWalker(root, 4 /* SHOW_TEXT */, null);
-    var n, fallback = null;
+    var n;
     while ((n = w.nextNode())) {
       if (before && !(n.compareDocumentPosition(before) & 4 /* FOLLOWING */)) break;
       var t = n.nodeValue.replace(/\s+/g, ' ').trim();
-      if (t.length < 2 || !/[a-z]/i.test(t) || NOISE_RE.test(t)) continue;
+      if (t.length < 2 || !/[a-z]/i.test(t) || NOISE_RE.test(t) || AMOUNT_RE.test(t)) continue;
+      if (reject && reject[norm(t)]) continue;
       var inside = false;
       for (var i = 0; i < skip.length; i++) if (skip[i].contains(n)) { inside = true; break; }
       if (inside) continue;
-      if (n.parentElement && visible(n.parentElement)) return t;
-      if (!fallback) fallback = t;
+      return t;
     }
-    return fallback;
+    return null;
   }
   function buildIndex() {
     var cells = allCells();
@@ -102,10 +110,12 @@
       return !rows.some(function (o) { return o !== r && r.el.contains(o.el); });
     });
     var rowEls = rows.map(function (r) { return r.el; });
+    var names = {};
+    rows.forEach(function (r) { names[r.key] = true; });
     rows.forEach(function (r) {
       var a = r.el.parentElement, depth = 0, title = null;
       while (a && depth < 8 && !title) {
-        title = firstText(a, rowEls, r.el);
+        title = firstText(a, rowEls, r.el, names);
         if (a === document.body) break;
         a = a.parentElement; depth++;
       }
@@ -176,7 +186,8 @@
       var txt = buttonText(btn);
       if (SUBMIT_RE.test(txt)) {
         var inp = stakeInput(btn.parentElement);
-        if (inp) return { t: 'place', stake: String(inp.value || '').trim() };
+        var stake = inp ? String(inp.value || '').trim() : '';
+        if (stake) return { t: 'place', stake: stake };
       } else if (CANCEL_RE.test(txt) && stakeInput(btn.parentElement)) {
         return { t: 'cancel' };
       }
@@ -268,7 +279,12 @@
     try { u = new URL(d.url); } catch (e) { return report(false, 'bad address'); }
     if (!/^https?:$/.test(u.protocol)) return report(false, 'bad address');
     var path = u.pathname + u.search + u.hash;
-    if (location.origin !== u.origin) { location.href = u.href; return report(true, 'opening ' + u.host + path); }
+    if (location.origin !== u.origin) {
+      // already on another betting site: stay there, the PC and this phone are paired across sites
+      if (/^https?:$/.test(location.protocol)) return;
+      location.href = u.href;
+      return report(true, 'opening ' + u.host + path);
+    }
     if (location.pathname + location.search + location.hash === path) return;
     history.pushState({}, '', path);
     window.dispatchEvent(new PopStateEvent('popstate', { state: {} }));
