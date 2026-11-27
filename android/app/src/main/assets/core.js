@@ -280,16 +280,21 @@
     if (!/^https?:$/.test(u.protocol)) return report(false, 'bad address');
     var path = u.pathname + u.search + u.hash;
     if (location.origin !== u.origin) {
-      // already on another betting site: stay there, the PC and this phone are paired across sites
-      if (/^https?:$/.test(location.protocol)) return;
-      location.href = u.href;
-      return report(true, 'opening ' + u.host + path);
+      if (!/^https?:$/.test(location.protocol)) { // blank start page: just open the PC's page
+        location.href = u.href;
+        return report(true, 'opening ' + u.host + path);
+      }
+      // On another betting site. Sites built on the same system share match addresses
+      // (/game-details/...), so the same match can be opened here; otherwise stay put.
+      var shared = /^\/game-details\//.test(path) &&
+        (/^\/game-details\//.test(location.pathname) || !!document.querySelector('a[href^="/game-details/"]'));
+      if (!shared) return;
     }
     if (location.pathname + location.search + location.hash === path) return;
     history.pushState({}, '', path);
     window.dispatchEvent(new PopStateEvent('popstate', { state: {} }));
     setTimeout(function () { // site did not react to the route change: load it normally
-      if (location.pathname + location.search + location.hash !== path) location.href = u.href;
+      if (location.pathname + location.search + location.hash !== path) location.href = location.origin + path;
     }, 600);
     return report(true, 'opened ' + path);
   }
